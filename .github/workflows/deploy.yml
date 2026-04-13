@@ -1,11 +1,9 @@
 # GitHub → Settings → Secrets and variables → Actions:
-#   DOCKERHUB_USERNAME — Docker Hub username
-#   DOCKERHUB_TOKEN    — Access Token (Hub → Account Settings → Security); do not use account password
-#   EC2_HOST           — EC2 IP or DNS
-#   EC2_USER           — e.g. ubuntu, ec2-user
-#   EC2_KEY            — SSH private key PEM
-# Pushes: <DOCKERHUB_USERNAME>/testawss3:latest
-# To change repo name: edit IMAGE_NAME below.
+#   DOCKER_USERNAME  — Docker Hub username (namespace), ví dụ: myuser  → image: myuser/testawss3:latest
+#   DOCKER_PASSWORD  — Docker Hub Access Token
+#   EC2_HOST, EC2_USER, EC2_KEY
+#
+# Nếu tag bị "/testawss3:latest" → DOCKER_USERNAME chưa set hoặc tên secret trong YAML không khớp với repo.
 
 name: Deploy to EC2
 
@@ -25,6 +23,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Verify Docker Hub username
+        run: |
+          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
+            echo "::error::Thiếu secret DOCKER_USERNAME (Docker Hub user/namespace). Repo → Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -33,7 +38,7 @@ jobs:
 
       - name: Build and push image
         env:
-          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          IMAGE: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         run: |
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
@@ -49,9 +54,9 @@ jobs:
         run: |
           ssh -i ~/.ssh/ec2_deploy "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" bash -s << EOF
           set -euo pipefail
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-          docker pull "${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker pull "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           docker stop testawss3 2>/dev/null || true
           docker rm testawss3 2>/dev/null || true
-          docker run -d --name testawss3 -p 8080:8080 --restart unless-stopped "${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          docker run -d --name testawss3 -p 8080:8080 --restart unless-stopped "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           EOF
