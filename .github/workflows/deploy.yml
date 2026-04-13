@@ -1,0 +1,57 @@
+# GitHub → Settings → Secrets and variables → Actions:
+#   DOCKERHUB_USERNAME — Docker Hub username
+#   DOCKERHUB_TOKEN    — Access Token (Hub → Account Settings → Security); do not use account password
+#   EC2_HOST           — EC2 IP or DNS
+#   EC2_USER           — e.g. ubuntu, ec2-user
+#   EC2_KEY            — SSH private key PEM
+# Pushes: <DOCKERHUB_USERNAME>/testawss3:latest
+# To change repo name: edit IMAGE_NAME below.
+
+name: Deploy to EC2
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  IMAGE_NAME: testawss3
+  IMAGE_TAG: latest
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        run: |
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_KEY }}" > ~/.ssh/ec2_deploy
+          chmod 600 ~/.ssh/ec2_deploy
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Pull and run on EC2
+        run: |
+          ssh -i ~/.ssh/ec2_deploy "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" bash -s << EOF
+          set -euo pipefail
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          docker pull "${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          docker stop testawss3 2>/dev/null || true
+          docker rm testawss3 2>/dev/null || true
+          docker run -d --name testawss3 -p 8080:8080 --restart unless-stopped "${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          EOF
