@@ -3,7 +3,8 @@
 #   DOCKER_PASSWORD  — Docker Hub Access Token
 #   EC2_HOST, EC2_USER, EC2_KEY
 #
-# Nếu tag bị "/testawss3:latest" → DOCKER_USERNAME chưa set hoặc tên secret trong YAML không khớp với repo.
+# Log có thể hiện ***/testawss3:latest — đó là GitHub che secret, không phải tag thật.
+# invalid reference format: thư��ng do USERNAME có chữ HOA hoặc dính space/xuống dòng → đã lowercase + trim bên dư��i.
 
 name: Deploy to EC2
 
@@ -37,9 +38,10 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push image
-        env:
-          IMAGE: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         run: |
+          # Namespace image Docker phải lowercase, không được có space đầu/cuối
+          HUB_USER=$(echo -n "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]' | xargs)
+          IMAGE="${HUB_USER}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
 
@@ -52,11 +54,13 @@ jobs:
 
       - name: Pull and run on EC2
         run: |
+          HUB_USER=$(echo -n "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]' | xargs)
+          IMAGE="${HUB_USER}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           ssh -i ~/.ssh/ec2_deploy "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" bash -s << EOF
           set -euo pipefail
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-          docker pull "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${HUB_USER}" --password-stdin
+          docker pull "${IMAGE}"
           docker stop testawss3 2>/dev/null || true
           docker rm testawss3 2>/dev/null || true
-          docker run -d --name testawss3 -p 8080:8080 --restart unless-stopped "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          docker run -d --name testawss3 -p 8080:8080 --restart unless-stopped "${IMAGE}"
           EOF
