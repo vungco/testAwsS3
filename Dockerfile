@@ -1,4 +1,8 @@
 # syntax=docker/dockerfile:1
+#
+# Run (pass all config via env file):
+#   docker run -p 8080:8080 --env-file .env.prod your-image
+# application.yaml only maps environment variables; real values live in .env.dev / .env.prod.
 
 # --- Build ---
 FROM eclipse-temurin:21-jdk-alpine AS builder

@@ -60,7 +60,7 @@ public class S3FileStorageService {
 
     private String requireBucket() {
         if (!StringUtils.hasText(s3Properties.getBucket())) {
-            throw new IllegalStateException("aws.s3.bucket chưa được cấu hình trong application.yaml");
+            throw new IllegalStateException("AWS_S3_BUCKET (aws.s3.bucket) is not set; add it to your env file.");
         }
         return s3Properties.getBucket().trim();
     }

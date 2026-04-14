@@ -1,0 +1,13 @@
+# Only for spring.profiles.active=test (JUnit). Does not replace .env.dev / .env.prod for the real app.
+spring:
+  elasticsearch:
+    uris: http://127.0.0.1:9200
+    connection-timeout: 10s
+    socket-timeout: 60s
+
+aws:
+  s3:
+    bucket: test-bucket-local
+    region: ap-southeast-1
+    access-key: ""
+    secret-key: ""

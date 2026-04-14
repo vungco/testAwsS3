@@ -1,32 +1,10 @@
 spring:
   application:
     name: testAwsS3
-  datasource:
-    url: jdbc:h2:file:./data/benchmark;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-    open-in-view: false
-    properties:
-      hibernate:
-        jdbc:
-          batch_size: 500
-        order_inserts: true
   elasticsearch:
-    uris: http://localhost:9200
-    connection-timeout: 10s
-    socket-timeout: 60s
-
-app:
-  benchmark:
-    default-seed-size: 50000
-    top-limit: 100
-    batch-size: 500
-    max-seed-size: 200000
+    uris: ${SPRING_ELASTICSEARCH_URIS}
+    connection-timeout: ${SPRING_ELASTICSEARCH_CONNECTION_TIMEOUT}
+    socket-timeout: ${SPRING_ELASTICSEARCH_SOCKET_TIMEOUT}
 
 # Swagger UI: http://localhost:8080/swagger-ui.html
 # OpenAPI JSON: http://localhost:8080/v3/api-docs
@@ -38,15 +16,12 @@ springdoc:
     operations-sorter: alpha
     tags-sorter: alpha
 
-# Bucket/region/credential có thể set trong file .env (xem .env.example).
-# Gradle bootRun tự inject .env vào process.
-#
-# Nếu không set access-key/secret-key (để trống), SDK dùng default chain:
-# ~/.aws/credentials, IAM role (EC2/ECS)…
+# Real values come only from env (see .env.dev / .env.prod and .env.example).
+# S3: leave access-key/secret-key empty to use the SDK default credential chain (IAM, ~/.aws/credentials, etc.).
 aws:
   s3:
-    bucket: ${AWS_S3_BUCKET:your-bucket-name}
-    region: ${AWS_S3_REGION:ap-southeast-1}
+    bucket: ${AWS_S3_BUCKET}
+    region: ${AWS_S3_REGION}
     access-key: ${AWS_ACCESS_KEY_ID:}
     secret-key: ${AWS_SECRET_ACCESS_KEY:}
     session-token: ${AWS_SESSION_TOKEN:}
