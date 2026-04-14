@@ -56,19 +56,42 @@ jobs:
         run: |
           HUB_USER=$(echo -n "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]' | xargs)
           IMAGE="${HUB_USER}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          ssh -i ~/.ssh/ec2_deploy "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" bash -s << EOF
+          echo "=== [deploy] Docker image to run on EC2: ${IMAGE} ==="
+          echo "=== [deploy] Opening SSH (ConnectTimeout=30s). If this hangs or times out: check EC2 security group allows TCP 22 from the internet (GitHub runner IPs change), EC2_HOST is the public IP/DNS, instance is running. ==="
+          set +e
+          ssh -i ~/.ssh/ec2_deploy \
+            -o ConnectTimeout=30 \
+            -o ConnectionAttempts=2 \
+            -o BatchMode=yes \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            bash -s << EOF
           set -euo pipefail
+          trap 'echo "::error::Remote deploy failed at line \$LINENO (exit \$?): \$BASH_COMMAND"' ERR
           DEPLOY_DIR=/home/deploy/testAwsS3
+          echo "=== [deploy remote] DEPLOY_DIR=\$DEPLOY_DIR ==="
+          echo "=== [deploy remote] Step: cd ==="
           cd "\$DEPLOY_DIR"
+          echo "=== [deploy remote] Step: docker login (Hub) ==="
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${HUB_USER}" --password-stdin
+          echo "=== [deploy remote] Step: docker pull ${IMAGE} ==="
           docker pull "${IMAGE}"
+          echo "=== [deploy remote] Step: stop/remove old container ==="
           docker stop testawss3 2>/dev/null || true
           docker rm testawss3 2>/dev/null || true
           ENV_FILE="\$DEPLOY_DIR/.env.pro"
+          echo "=== [deploy remote] Step: check env file ==="
           if [ ! -f "\$ENV_FILE" ]; then
-            echo "Missing \$ENV_FILE — create this file on the server under \$DEPLOY_DIR."
+            echo "::error::Missing env file: \$ENV_FILE — create it on the server under \$DEPLOY_DIR."
             exit 1
           fi
+          echo "=== [deploy remote] Step: docker run (env-file=\$ENV_FILE) ==="
           # If Elasticsearch runs in another container, add: --network <same_network_as_elasticsearch>
           docker run -d --name testawss3 -p 8080:8080 --restart unless-stopped --env-file "\$ENV_FILE" "${IMAGE}"
+          echo "=== [deploy remote] Done. ==="
           EOF
+          SSH_EXIT=$?
+          set -e
+          if [ "$SSH_EXIT" -ne 0 ]; then
+            echo "::error::SSH or remote script exited with code ${SSH_EXIT}. If you saw 'Connection timed out': EC2 security group / network. If you saw 'Permission denied': EC2_USER or EC2_KEY. If remote failed after SSH: read the '[deploy remote] Step' line above the error."
+            exit "$SSH_EXIT"
+          fi
