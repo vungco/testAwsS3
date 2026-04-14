@@ -18,7 +18,8 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # Runner must have Docker (build/push) and SSH client; register in repo Settings → Actions → Runners.
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
